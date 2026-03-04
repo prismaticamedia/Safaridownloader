@@ -1,42 +1,42 @@
-# SafariBooks Downloader (UI + PDF Support)
+# S4f4riDownload (Con Interfaz Gráfica y Soporte PDF)
 
-Welcome to the SafariBooks Downloader! This project provides an easy-to-use graphical interface (built with PyQt6) to download books from Safari Books Online (O'Reilly Learning) and optionally convert them into beautiful PDFs. 
+¡Bienvenido a **S4f4riDownload**! Este proyecto proporciona una interfaz gráfica de usuario (GUI) fácil de usar, construida con PyQt6, para descargar libros de la biblioteca de Safari Books Online (O'Reilly Learning) y, opcionalmente, convertirlos en hermosos archivos PDF.
 
-## Features
-- **User-Friendly Desktop UI:** A simple interface to input your Book ID and paste your cookies.
-- **EPUB and PDF Output:** Automatically generates an EPUB containing the book's content, and optionally converts it to a clean PDF with accurate page numbering (using PyPDF2 and ReportLab).
-- **Cloudflare Bypass:** Integrates Cloudscraper to seamlessly retrieve content from the O'Reilly API.
-- **Improved Formatting:** Fixes rendering issues on Apple Books by correctly defining character encoding and image aspect ratios.
+## Características Principales
+- **Interfaz de Escritorio Intuitiva:** Ingresa el ID de tu libro y pega tus cookies rápidamente.
+- **Salida en EPUB y PDF Formateado:** Genera automáticamente un EPUB con el contenido del libro y ofrece la conversión a un PDF limpio con números de página precisos (utilizando PyPDF2 y ReportLab).
+- **Evasión de Cloudflare (Bypass):** Integra Cloudscraper para recuperar contenido de la API de O'Reilly sin interrupciones.
+- **Mejoras de Formato y Visualización:** Soluciona problemas de renderizado en Apple Books definiendo correctamente la codificación de caracteres y manteniendo las proporciones originales de las imágenes.
 
-## Setup and Installation
+## Instalación y Configuración
 
-1. Clone this repository to your local machine:
+1. Clona este repositorio en tu computadora local:
    ```bash
    git clone https://github.com/prismaticamedia/Safaridownloader.git
    cd Safaridownloader
    ```
-2. Install the required Python dependencies:
+2. Instala las dependencias necesarias de Python:
    ```bash
    pip3 install -r requirements.txt
    ```
-3. Run the application:
+3. Ejecuta la aplicación:
    ```bash
-   python3 safaribooks_ui.py
+   python3 s4f4ridownload_ui.py
    ```
 
-## How to Use
+## Cómo Usar S4f4riDownload
 
-1. **Get your Cookies**: Since the login endpoint is protected, you must log in to O'Reilly in your web browser and extract your session cookies.
-2. **Paste Cookies**: Open the application, go to the "1. Paste Cookies" tab, paste your raw cookies, and click **Save cookies.json**.
-3. **Download**: Navigate to the "2. Download Book" tab, enter the Book ID (e.g., `9781617299339`), choose whether you want a PDF generated, and click **Download**.
+1. **Obtén tus Cookies:** Dado que el inicio de sesión está protegido, debes iniciar sesión en O'Reilly desde tu navegador web y extraer tus cookies de sesión.
+2. **Pega las Cookies:** Abre la aplicación, ve a la pestaña "1. Paste Cookies", pega tus cookies y haz clic en **Save cookies.json**.
+3. **Descarga el Libro:** Navega a la pestaña "2. Download Book", ingresa el ID del libro (por ejemplo, `9781617299339`), elige si deseas generar un PDF y presiona **Download**.
 
 ---
 
-## Acknowledgments & Disclaimer
+## Agradecimientos y Aviso Legal
 
-This tool is a heavily modified and modernized fork based on the incredible foundational work of [Lorenzo Di Fuccia's original safaribooks project](https://github.com/lorenzodifuccia/safaribooks). We have built upon their core logic to bring a desktop GUI and enhanced PDF capabilities.
+Esta herramienta es una versión profundamente modificada y modernizada basada en el increíble trabajo fundacional del proyecto original [safaribooks de Lorenzo Di Fuccia](https://github.com/lorenzodifuccia/safaribooks). Hemos desarrollado sobre su lógica central para incorporar una GUI de escritorio y capacidades PDF mejoradas.
 
-### Important Disclaimer (adapted from the original author):
-> Download and generate EPUB of your favorite books from Safari Books Online library.
-> I'm not responsible for the use of this program, this is only for personal and educational purpose.
-> Before any usage please read the O'Reilly's Terms of Service.
+### Aviso Legal Importante (adaptado del autor original):
+> Descarga y genera EPUBs de tus libros favoritos desde la biblioteca de Safari Books Online.
+> No soy responsable del uso de este programa; esto es estrictamente para fines personales y educativos.
+> Antes de cualquier uso, por favor lee los Términos de Servicio de O'Reilly.

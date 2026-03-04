@@ -18,7 +18,7 @@ class DownloadThread(QThread):
         self.pdf = pdf
 
     def run(self):
-        cmd = ["python3", "safaribooks.py", self.book_id]
+        cmd = ["python3", "s4f4ridownload.py", self.book_id]
         if self.pdf:
             cmd.insert(2, "--pdf")
 
@@ -42,10 +42,10 @@ class DownloadThread(QThread):
             self.process.terminate()
             self.output_signal.emit("\\nProcess cancelled by user.\\n")
 
-class SafariBooksUI(QMainWindow):
+class S4f4riDownloadUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SafariBooks Downloader (PyQt6)")
+        self.setWindowTitle("S4f4riDownload (PyQt6)")
         self.resize(750, 550)
 
         self.tabs = QTabWidget()
@@ -189,6 +189,6 @@ class SafariBooksUI(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = SafariBooksUI()
+    window = S4f4riDownloadUI()
     window.show()
     sys.exit(app.exec())
