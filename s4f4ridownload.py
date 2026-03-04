@@ -14,12 +14,13 @@ import cloudscraper
 import traceback
 import subprocess
 import tempfile
+import zipfile
 import PyPDF2
 from html import escape
 from random import random
 from lxml import html, etree
 from multiprocessing import Process, Queue, Value
-from urllib.parse import urljoin, urlparse, parse_qs, quote_plus
+from urllib.parse import urljoin, urlparse, parse_qs, quote_plus, unquote
 
 
 PATH = os.path.dirname(os.path.realpath(__file__))
@@ -372,41 +373,46 @@ class SafariBooks:
         self.css = []
         self.images = []
 
-        self.display.info("Downloading book contents... (%s chapters)" % len(self.book_chapters), state=True)
-        self.BASE_HTML = self.BASE_01_HTML + (self.KINDLE_HTML if not args.kindle else "") + self.BASE_02_HTML
+        if self.book_info.get("is_video"):
+            self.display.info("Downloading video contents... (%s videos)" % len(self.book_chapters), state=True)
+            self.get_video()
+            self.display.info("Creating HTML video player...", state=True)
+            self.create_video_html()
+        else:
+            self.display.info("Downloading book contents... (%s chapters)" % len(self.book_chapters), state=True)
+            self.BASE_HTML = self.BASE_01_HTML + (self.KINDLE_HTML if not args.kindle else "") + self.BASE_02_HTML
 
-        self.cover = False
-        self.get()
-        if not self.cover:
-            self.cover = self.get_default_cover() if "cover" in self.book_info else False
-            cover_html = self.parse_html(
-                html.fromstring("<div id=\"sbo-rt-content\"><img src=\"Images/{0}\"></div>".format(self.cover)), True
-            )
+            self.cover = False
+            self.get()
+            if not self.cover:
+                self.cover = self.get_default_cover() if "cover" in self.book_info else False
+                cover_html = self.parse_html(
+                    html.fromstring("<div id=\"sbo-rt-content\"><img src=\"Images/{0}\"></div>".format(self.cover)), True
+                )
 
-            self.book_chapters = [{
-                "filename": "default_cover.xhtml",
-                "title": "Cover"
-            }] + self.book_chapters
+                self.book_chapters = [{
+                    "filename": "default_cover.xhtml",
+                    "title": "Cover"
+                }] + self.book_chapters
 
-            self.filename = self.book_chapters[0]["filename"]
-            self.save_page_html(cover_html)
+                self.filename = self.book_chapters[0]["filename"]
+                self.save_page_html(cover_html)
 
-        self.css_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
-        self.display.info("Downloading book CSSs... (%s files)" % len(self.css), state=True)
-        self.collect_css()
-        self.images_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
-        self.display.info("Downloading book images... (%s files)" % len(self.images), state=True)
-        self.collect_images()
+            self.css_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
+            self.display.info("Downloading book CSSs... (%s files)" % len(self.css), state=True)
+            self.collect_css()
+            self.images_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
+            self.display.info("Downloading book images... (%s files)" % len(self.images), state=True)
+            self.collect_images()
 
-        self.display.info("Creating EPUB file...", state=True)
-        self.create_epub()
+            self.display.info("Creating EPUB file...", state=True)
+            self.create_epub()
 
         if not args.no_cookies:
             json.dump(self.session.cookies.get_dict(), open(COOKIES_FILE, "w"))
 
         epub_file = os.path.join(self.BOOK_PATH, self.book_id + ".epub")
-        
-        if getattr(args, 'pdf', False):
+        if getattr(args, 'pdf', False) and not self.book_info.get("is_video"):
             self.display.info("Converting EPUB to PDF...", state=True)
             chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
             if not os.path.exists(chrome_path):
@@ -467,7 +473,7 @@ class SafariBooks:
 
                         self.display.info("Successfully created PDF: %s" % pdf_file)
 
-        self.display.done(epub_file)
+        self.display.done(epub_file if not self.book_info.get("is_video") else "index.html")
         self.display.unregister()
 
         if hasattr(args, 'log') and not args.log and hasattr(self, 'display') and hasattr(self.display, 'log_file'):
@@ -613,11 +619,36 @@ class SafariBooks:
             "description": res.get("description", ""),
             "issued": res.get("issued", ""),
             "web_url": res.get("web_url", ""),
-            "cover": res.get("cover_url", "")
+            "cover": res.get("cover_url", ""),
+            "is_video": res.get("format", "") == "video" or "video" in res.get("content_format", "")
         }
         return info
 
     def get_book_chapters(self, target_url=None):
+        if self.book_info.get("is_video"):
+            url = SAFARI_BASE_URL + "/api/v1/videotocs/{0}/".format(self.book_id)
+            response = self.requests_provider(url)
+            if response == 0:
+                self.display.exit("API: unable to retrieve video chapters.")
+            
+            response = response.json()
+            if "toc" not in response or not len(response["toc"]):
+                self.display.exit("API: unable to retrieve video chapters.")
+                
+            formatted_results = []
+            for c in response["toc"]:
+                if not c.get("ourn"):
+                    continue
+                # For videos, filename will be the reference_id + .mp4
+                filename = c["reference_id"].replace(":", "_").replace("%", "_") + ".mp4"
+                formatted_results.append({
+                    "filename": filename,
+                    "title": c.get("title", ""),
+                    "content": c.get("ourn"),
+                    "reference_id": c["reference_id"]
+                })
+            return formatted_results
+
         if target_url is None:
             target_url = SAFARI_BASE_URL + "/api/v2/epub-chapters/?epub_identifier=urn:orm:book:{0}".format(self.book_id)
             
@@ -636,8 +667,14 @@ class SafariBooks:
         # Map to old chapter dictionary format adding "filename"
         formatted_results = []
         for c in response["results"]:
-            url_path = c.get("url", "").rstrip("/") or c.get("content_url", "").rstrip("/")
-            c["filename"] = url_path.split("/")[-1] if url_path else "unknown.html"
+            # O'Reilly v2 API intra-chapter links expect the filename from 'content_url' 
+            # e.g https://learning.oreilly.com/api/v2/epubs/urn.../files/486227_2_En_17_Chapter.html
+            # URL gives us a massive urn:orm: format that breaks everything!
+            content_url = c.get("content_url", "")
+            raw_filename = content_url.split("/")[-1] if content_url else (c.get("url", "").split("/")[-1] or "unknown.html")
+            
+            # Replace colons and URL-encoded chars for valid EPUB OCF
+            c["filename"] = unquote(raw_filename).replace(":", "_").replace("%", "_")
             c["title"] = c.get("title", "")
             # Ensure proper string extraction of content URL for html fetching
             c["content"] = c.get("content_url") if c.get("content_url") else c.get("url")
@@ -696,11 +733,16 @@ class SafariBooks:
         return pathlib.Path(url).suffix[1:].lower() in ["jpg", "jpeg", "png", "gif"]
 
     def link_replace(self, link):
+        if link and link.startswith("#"):
+            return link
+
         if link and not link.startswith("mailto"):
             if not self.url_is_absolute(link):
                 if any(x in link for x in ["cover", "images", "graphics"]) or \
                         self.is_image_link(link):
                     image = link.split("/")[-1]
+                    # SafariBooks download unquotes the filename when saving it, so the HTML href must match
+                    image = unquote(image).replace(":", "_").replace("%", "_")
                     
                     # In O'Reilly v2 API, images aren't pre-populated in chapter metadata.
                     # We need to construct the absolute URL and add it to our download list
@@ -712,7 +754,20 @@ class SafariBooks:
 
                     return "Images/" + image
 
-                return link.replace(".html", ".xhtml")
+                # If it's a chapter link, escape colons and % so it matches our local filenames
+                # Also, sometimes the links contain full paths or fragments.
+                # O'Reilly v2 API URLs are complex. The safest way is to extract the filename part
+                # just like we do when saving the file, then sanitize it.
+                parsed_link = urlparse(link)
+                link_path = parsed_link.path.rstrip("/")
+                raw_filename = link_path.split("/")[-1] if link_path else "unknown.html"
+                cleaned_link = unquote(raw_filename).replace(":", "_").replace("%", "_").replace(".html", ".xhtml")
+                
+                # Preserve fragments (anchor links inside the chapter)
+                if parsed_link.fragment:
+                    cleaned_link += "#" + parsed_link.fragment
+                    
+                return cleaned_link
 
             else:
                 if self.book_id in link:
@@ -1135,13 +1190,148 @@ class SafariBooks:
             self.create_toc().encode("utf-8", "xmlcharrefreplace")
         )
 
-        zip_file = os.path.join(PATH, "Books", self.book_id)
-        if os.path.isfile(zip_file + ".zip"):
-            os.remove(zip_file + ".zip")
+        epub_file = os.path.join(self.BOOK_PATH, self.book_id + ".epub")
+        if os.path.isfile(epub_file):
+            os.remove(epub_file)
 
-        shutil.make_archive(zip_file, 'zip', self.BOOK_PATH)
-        os.rename(zip_file + ".zip", os.path.join(self.BOOK_PATH, self.book_id) + ".epub")
+        # EPUB spec mandates 'mimetype' must be the first file and uncompressed
+        with zipfile.ZipFile(epub_file, 'w') as zipf:
+            zipf.write(os.path.join(self.BOOK_PATH, "mimetype"), "mimetype", compress_type=zipfile.ZIP_STORED)
+            for root, _, files in os.walk(self.BOOK_PATH):
+                for file in files:
+                    if file == "mimetype" or file.endswith(".epub") or file.endswith(".pdf"):
+                        continue
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, self.BOOK_PATH)
+                    zipf.write(file_path, arcname, compress_type=zipfile.ZIP_DEFLATED)
 
+    def get_video(self):
+        for i, chapter in enumerate(self.book_chapters):
+            filename = chapter["filename"]
+            out_path = os.path.join(self.BOOK_PATH, filename)
+            
+            self.display.info(f"Downloading video {i+1}/{len(self.book_chapters)}: {chapter['title']}")
+            
+            if os.path.exists(out_path):
+                self.display.info(f"  Already exists: {filename}")
+                continue
+            
+            # Fetch videoclips to get kaltura_entry_id
+            clip_url = SAFARI_BASE_URL + "/api/v1/videoclips/" + chapter["reference_id"] + "/"
+            res = self.requests_provider(clip_url)
+            if res == 0:
+                self.display.error(f"  Failed to get clip info for {chapter['reference_id']}")
+                continue
+            
+            clip_data = res.json()
+            kaltura_id = clip_data.get("kaltura_entry_id")
+            if not kaltura_id:
+                self.display.error(f"  No Kaltura entry ID found for {chapter['reference_id']}")
+                continue
+                
+            # Extract m3u8 playlist from Kaltura
+            partner_id = "1926081"
+            m3u8_url = f"https://cdnapisec.kaltura.com/p/{partner_id}/sp/{partner_id}00/playManifest/entryId/{kaltura_id}/format/applehttp/protocol/https"
+            
+            # Download using ffmpeg
+            cmd = [
+                "ffmpeg", "-y", "-i", m3u8_url,
+                "-c", "copy", "-bsf:a", "aac_adtstoasc",
+                out_path
+            ]
+            
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.display.info(f"  Successfully downloaded: {filename}")
+            except subprocess.CalledProcessError as e:
+                self.display.error(f"  FFmpeg download failed for {filename}: {e}")
+
+    def create_video_html(self):
+        index_path = os.path.join(self.BOOK_PATH, "index.html")
+        
+        html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{self.book_info['title']}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 0; display: flex; height: 100vh; background-color: #f4f4f4;
+        }}
+        #sidebar {{
+            width: 300px; background-color: #2c3e50; color: white; overflow-y: auto; padding-top: 20px;
+        }}
+        #content {{
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000;
+        }}
+        .sidebar-title {{
+            padding: 0 20px 20px; font-size: 1.2em; font-weight: bold; border-bottom: 1px solid #34495e; margin-bottom: 10px;
+        }}
+        .video-item {{
+            padding: 15px 20px; cursor: pointer; border-bottom: 1px solid #34495e; transition: background 0.2s;
+        }}
+        .video-item:hover {{
+            background-color: #34495e;
+        }}
+        .video-item.active {{
+            background-color: #2980b9; font-weight: bold;
+        }}
+        video {{
+            width: 100%; max-width: 1200px; max-height: 80vh; outline: none;
+        }}
+        #video-title {{
+            color: white; margin-top: 20px; font-size: 1.5em; text-align: center; padding: 0 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="sidebar-title">{self.book_info['title']}</div>
+"""
+        
+        for i, chapter in enumerate(self.book_chapters):
+            title = chapter["title"].replace('"', '&quot;')
+            filename = chapter["filename"]
+            active_class = "active" if i == 0 else ""
+            html_content += f'        <div class="video-item {active_class}" onclick="playVideo(\'{filename}\', \'{title}\', this)">{title}</div>\\n'
+            
+        first_video = self.book_chapters[0]["filename"] if self.book_chapters else ""
+        first_title = self.book_chapters[0]["title"] if self.book_chapters else ""
+        
+        html_content += f"""    </div>
+    <div id="content">
+        <video id="player" controls controlsList="nodownload" src="{first_video}"></video>
+        <div id="video-title">{first_title}</div>
+    </div>
+
+    <script>
+        function playVideo(filename, title, element) {{
+            document.querySelectorAll('.video-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            
+            const player = document.getElementById('player');
+            player.src = filename;
+            player.play();
+            
+            document.getElementById('video-title').textContent = title;
+        }}
+        
+        // Auto-play next video when current one ends
+        document.getElementById('player').addEventListener('ended', function() {{
+            const activeItem = document.querySelector('.video-item.active');
+            const nextItem = activeItem.nextElementSibling;
+            if (nextItem && nextItem.classList.contains('video-item')) {{
+                nextItem.click();
+            }}
+        }});
+    </script>
+</body>
+</html>
+"""
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
 
 # MAIN
 if __name__ == "__main__":

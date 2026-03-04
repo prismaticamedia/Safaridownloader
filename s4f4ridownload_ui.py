@@ -96,7 +96,7 @@ class S4f4riDownloadUI(QMainWindow):
         self.book_id_input.setPlaceholderText("e.g. 9781835880401 or full URL")
         input_layout.addWidget(self.book_id_input)
 
-        self.pdf_check = QCheckBox("Generate PDF")
+        self.pdf_check = QCheckBox("Generate PDF (Books only)")
         self.pdf_check.setChecked(True)
         input_layout.addWidget(self.pdf_check)
 
