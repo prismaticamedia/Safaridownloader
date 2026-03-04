@@ -30,9 +30,9 @@ class DownloadThread(QThread):
             for line in iter(self.process.stdout.readline, ''):
                 self.output_signal.emit(line)
             self.process.stdout.close()
-            process.wait()
-            self.output_signal.emit(f"\\nProcess finished with exit code {process.returncode}\\n")
-            self.finished_signal.emit(process.returncode)
+            self.process.wait()
+            self.output_signal.emit(f"\\nProcess finished with exit code {self.process.returncode}\\n")
+            self.finished_signal.emit(self.process.returncode)
         except Exception as e:
             self.output_signal.emit(f"\\nError running script: {e}\\n")
             self.finished_signal.emit(-1)
