@@ -5,7 +5,7 @@
 ## Características Principales
 - **Interfaz de Escritorio Intuitiva:** Ingresa el ID de tu libro y pega tus cookies rápidamente.
 - **Salida en EPUB y PDF Formateado:** Genera automáticamente un EPUB con el contenido del libro y ofrece la conversión a un PDF limpio con números de página precisos (utilizando PyPDF2 y ReportLab).
-- **Evasión de Cloudflare (Bypass):** Integra Cloudscraper para recuperar contenido de la API de O'Reilly sin interrupciones.
+- **Descarga sin interrupciones:** Integra Cloudscraper para recuperar contenido de la API de O'Reilly sin interrupciones.
 - **Mejoras de Formato y Visualización:** Soluciona problemas de renderizado en Apple Books definiendo correctamente la codificación de caracteres y manteniendo las proporciones originales de las imágenes.
 
 ## Instalación y Configuración
